@@ -36,6 +36,7 @@ html, body { height: 100%; overflow: hidden; }
 body {
     display: flex;
     flex-direction: column;
+    position: relative;  /* モーダル・トーストの基準（fixed を使わない） */
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Hiragino Sans', 'Segoe UI', Roboto, sans-serif;
@@ -52,10 +53,9 @@ strong { font-weight: 700; color: var(--text); }
 header {
     flex-shrink: 0;
     z-index: 100;
-    background: var(--bg);
+    background: #000;  /* ステータスバー（black）と色をそろえる */
     border-bottom: 1px solid var(--line);
-    /* iOSはステータスバーの下に自動でぼかしをかけるため、その範囲より下まで余白をとる */
-    padding-top: calc(env(safe-area-inset-top) + 4px);
+    padding-top: env(safe-area-inset-top);
 }
 
 .header-inner {
@@ -459,7 +459,7 @@ details.cpu[open] summary { margin-bottom: 8px; }
 
 /* ─── Player modal (bottom sheet) ─── */
 body.modal-open main { overflow: hidden; }
-.modal { position: fixed; inset: 0; z-index: 300; }
+.modal { position: absolute; inset: 0; z-index: 300; }
 .modal[hidden] { display: none; }
 .modal-backdrop {
     position: absolute; inset: 0;
@@ -473,7 +473,7 @@ body.modal-open main { overflow: hidden; }
     position: absolute;
     left: 0; right: 0; bottom: 0;
     max-width: 640px;
-    max-height: 88vh;
+    max-height: 88%;
     margin: 0 auto;
     overflow-y: auto;
     background: var(--surface);
@@ -568,7 +568,7 @@ body.modal-open main { overflow: hidden; }
 
 /* ─── Toast ─── */
 .toast {
-    position: fixed;
+    position: absolute;
     left: 50%;
     bottom: calc(var(--tabbar-h) + 16px + env(safe-area-inset-bottom));
     z-index: 400;
