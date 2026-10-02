@@ -767,13 +767,6 @@ function renderSettings() {
             </dl>
         </div>
         <div class="card">
-            <div class="card-title">上部の余白（一時的な調整用）</div>
-            <p class="note gap">タイトルの上のぼやけが気にならない値を選んでください。すぐ反映され、この端末に保存されます。</p>
-            <div class="seg seg-wide" id="header-extra">
-                ${HEADER_EXTRA_STEPS.map(v => `<button class="${v === headerExtra ? 'active' : ''}" data-extra="${v}">${v}</button>`).join('')}
-            </div>
-        </div>
-        <div class="card">
             <div class="card-title">データ</div>
             <p class="note gap">データはこの端末のブラウザに保存されます。iPhoneは「ホーム画面に追加」して使うと消えにくくなります。念のため定期的にバックアップしてください。</p>
             <div class="btn-row">
@@ -791,12 +784,6 @@ function renderSettings() {
     document.getElementById('btn-import').onclick = () => document.getElementById('file-import').click();
     document.getElementById('file-import').onchange = importData;
     document.getElementById('btn-update').onclick = hardReload;
-    document.getElementById('header-extra').onclick = e => {
-        const b = e.target.closest('[data-extra]');
-        if (!b) return;
-        applyHeaderExtra(+b.dataset.extra);
-        document.querySelectorAll('#header-extra button').forEach(x => x.classList.toggle('active', x === b));
-    };
     document.getElementById('btn-reload').onclick = () => refresh(true);
     document.getElementById('btn-reset').onclick = () => {
         if (!confirm('ロスターと履歴をすべて削除します。よろしいですか？')) return;
@@ -899,16 +886,8 @@ function closePlayer() {
 }
 
 /* ─── アプリの更新（ホーム画面アプリには再読み込みボタンがないため） ─── */
-/* ─── 上部の余白の調整（ぼやけ対策の値を実機で決めるための一時機能） ─── */
-const HEADER_EXTRA_STEPS = [0, 4, 8, 12, 16, 24];
-let headerExtra = +(load('nbaf.headerExtra', 0)) || 0;
-
-function applyHeaderExtra(px) {
-    headerExtra = px;
-    document.documentElement.style.setProperty('--header-extra', `${px}px`);
-    save('nbaf.headerExtra', px);
-}
-applyHeaderExtra(headerExtra);
+// 一時的な余白調整機能（v1.8）で保存した値を掃除する
+try { localStorage.removeItem('nbaf.headerExtra'); } catch (e) { /* noop */ }
 
 const APP_VERSION = document.querySelector('meta[name="app-version"]')?.content || '';
 let latestVersion = null;
