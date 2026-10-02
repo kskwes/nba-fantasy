@@ -911,6 +911,7 @@ async function checkUpdate() {
 // キャッシュを無視して最新版を読み込み直す（localStorage のデータには影響しない）
 async function hardReload() {
     const ver = latestVersion || APP_VERSION;
+    document.querySelectorAll('#update-btn, #btn-update').forEach(b => { b.disabled = true; b.textContent = '更新中…'; });
     try {
         await fetch(location.pathname, { cache: 'reload' });  // 次回起動時の index.html も新しくしておく
     } catch (e) { /* noop */ }
