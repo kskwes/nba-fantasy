@@ -55,7 +55,7 @@ header {
     z-index: 100;
     background: #000;  /* ステータスバー（black）と色をそろえる */
     border-bottom: 1px solid var(--line);
-    padding-top: env(safe-area-inset-top);
+    padding-top: calc(env(safe-area-inset-top) + var(--header-extra, 0px));
 }
 
 .header-inner {
@@ -366,6 +366,7 @@ main {
     cursor: pointer;
     transition: background 0.15s, color 0.15s;
 }
+.seg-wide { grid-template-columns: repeat(6, 1fr); }
 .seg button small { display: block; font-size: 10px; font-weight: 500; }
 .seg button.active { background: var(--surface3); color: var(--text); }
 input[type="search"], select {
