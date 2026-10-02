@@ -595,7 +595,8 @@ async function renderWeek() {
 }
 
 /* ─── 編成タブ ─── */
-const search = { q: '', team: '', sort: 'price-desc' };
+const search = { q: '', team: '', pos: '', sort: 'price-desc' };
+const POSITIONS = [['G', 'ガード'], ['F', 'フォワード'], ['C', 'センター']];
 
 async function renderTeam() {
     const el = document.getElementById('view-team');
@@ -643,6 +644,9 @@ async function renderTeam() {
             <div class="card-title">選手を探す <span class="card-aside">試合数は ${fmtWeek(targetWk)}</span></div>
             <div class="search-controls">
                 <input type="search" id="s-q" placeholder="選手名で検索" value="${esc(search.q)}" autocomplete="off">
+                <div class="seg" id="s-pos">
+                    ${[['', '全て'], ...POSITIONS].map(([v, l]) => `<button class="${v === search.pos ? 'active' : ''}" data-pos="${v}">${v ? `${v}<small>${l}</small>` : l}</button>`).join('')}
+                </div>
                 <select id="s-team">
                     <option value="">全チーム</option>
                     ${teams.map(t => `<option value="${esc(t)}" ${t === search.team ? 'selected' : ''}>${esc(t)}</option>`).join('')}
@@ -659,13 +663,20 @@ async function renderTeam() {
     renderSearchResults(gamesOf);
     document.getElementById('s-q').addEventListener('input', e => { search.q = e.target.value; renderSearchResults(gamesOf); });
     document.getElementById('s-team').addEventListener('change', e => { search.team = e.target.value; renderSearchResults(gamesOf); });
+    document.getElementById('s-pos').addEventListener('click', e => {
+        const b = e.target.closest('[data-pos]');
+        if (!b) return;
+        search.pos = b.dataset.pos;
+        document.querySelectorAll('#s-pos button').forEach(x => x.classList.toggle('active', x === b));
+        renderSearchResults(gamesOf);
+    });
     document.getElementById('s-sort').addEventListener('change', e => { search.sort = e.target.value; renderSearchResults(gamesOf); });
 }
 
 function renderSearchResults(gamesOf) {
     const q = search.q.trim().toLowerCase();
     let list = pool.filter(p =>
-        (!q || p.name.toLowerCase().includes(q)) && (!search.team || p.team === search.team));
+        (!q || p.name.toLowerCase().includes(q)) && (!search.team || p.team === search.team) && (!search.pos || p.pos === search.pos));
     const cmp = {
         'price-desc': (a, b) => b.price - a.price,
         'price-asc':  (a, b) => a.price - b.price,

@@ -331,7 +331,29 @@ main {
 
 /* ─── Search ─── */
 .search-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
-.search-controls input { grid-column: 1 / -1; }
+.search-controls input, .search-controls .seg { grid-column: 1 / -1; }
+
+.seg {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    padding: 4px;
+    border-radius: 12px;
+    background: var(--surface2);
+}
+.seg button {
+    padding: 7px 0;
+    border: none;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.seg button small { display: block; font-size: 10px; font-weight: 500; }
+.seg button.active { background: var(--surface3); color: var(--text); }
 input[type="search"], select {
     width: 100%;
     background: var(--surface2);
