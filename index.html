@@ -7,11 +7,13 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="NBA Fantasy">
+    <!-- 修正をアップするたびに、この番号と下の style.css / app.js の ?v= を同じ値に上げる -->
+    <meta name="app-version" content="1.2">
     <title>NBA Fantasy</title>
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="icon-180.png">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=1.2">
 </head>
 <body>
     <header>
@@ -62,8 +64,13 @@
         </div>
     </div>
 
+    <div class="update-bar" id="update-bar" hidden>
+        <span id="update-text">新しいバージョンがあります</span>
+        <button class="btn primary" id="update-btn">更新</button>
+    </div>
+
     <div class="toast" id="toast"></div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=1.2"></script>
 </body>
 </html>

@@ -773,15 +773,17 @@ function renderSettings() {
                 <button class="btn" id="btn-export">バックアップを書き出す</button>
                 <button class="btn" id="btn-import">バックアップを読み込む</button>
                 <input type="file" id="file-import" accept="application/json,.json" hidden>
+                <button class="btn" id="btn-update">アプリを更新</button>
                 <button class="btn" id="btn-reload">選手データを再取得</button>
                 <button class="btn danger" id="btn-reset">すべてリセット</button>
             </div>
         </div>
-        <p class="note center">データ: ESPN</p>`;
+        <p class="note center">v${esc(APP_VERSION)}${latestVersion && latestVersion !== APP_VERSION ? `（最新 v${esc(latestVersion)}）` : ''} · データ: ESPN</p>`;
 
     document.getElementById('btn-export').onclick = exportData;
     document.getElementById('btn-import').onclick = () => document.getElementById('file-import').click();
     document.getElementById('file-import').onchange = importData;
+    document.getElementById('btn-update').onclick = hardReload;
     document.getElementById('btn-reload').onclick = () => refresh(true);
     document.getElementById('btn-reset').onclick = () => {
         if (!confirm('ロスターと履歴をすべて削除します。よろしいですか？')) return;
@@ -883,6 +885,38 @@ function closePlayer() {
     setTimeout(() => { m.hidden = true; }, 200);
 }
 
+/* ─── アプリの更新（ホーム画面アプリには再読み込みボタンがないため） ─── */
+const APP_VERSION = document.querySelector('meta[name="app-version"]')?.content || '';
+let latestVersion = null;
+
+// サーバー上の index.html をキャッシュなしで取得し、バージョンを比べる
+async function checkUpdate() {
+    try {
+        const res = await fetch(`${location.pathname}?_=${Date.now()}`, { cache: 'no-store' });
+        const m = (await res.text()).match(/name="app-version" content="([^"]+)"/);
+        if (!m) return;
+        latestVersion = m[1];
+        const bar = document.getElementById('update-bar');
+        if (latestVersion !== APP_VERSION) {
+            document.getElementById('update-text').textContent = `新しいバージョン v${latestVersion} があります`;
+            bar.hidden = false;
+        } else {
+            bar.hidden = true;
+        }
+    } catch (e) {
+        // オフラインなどは無視
+    }
+}
+
+// キャッシュを無視して最新版を読み込み直す（localStorage のデータには影響しない）
+async function hardReload() {
+    const ver = latestVersion || APP_VERSION;
+    try {
+        await fetch(location.pathname, { cache: 'reload' });  // 次回起動時の index.html も新しくしておく
+    } catch (e) { /* noop */ }
+    location.replace(`${location.pathname}?v=${encodeURIComponent(ver)}&t=${Date.now()}`);
+}
+
 /* ─── 画面制御 ─── */
 let activeView = 'week';
 
@@ -890,7 +924,7 @@ function showView(name) {
     activeView = name;
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${name}`));
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === name));
-    window.scrollTo(0, 0);
+    document.querySelector('main').scrollTop = 0;
     renderActive();
 }
 
@@ -949,8 +983,13 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closePlayer(); });
 document.getElementById('refresh-btn').addEventListener('click', () => refresh());
+document.getElementById('update-btn').addEventListener('click', hardReload);
 document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && Date.now() - lastSync > 60e3) refresh();
+    if (document.visibilityState === 'visible' && Date.now() - lastSync > 60e3) {
+        refresh();
+        checkUpdate();
+    }
 });
 
 refresh();
+checkUpdate();

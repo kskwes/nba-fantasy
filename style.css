@@ -25,13 +25,23 @@
 /* ─── Base ─── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/*
+ * アプリシェル構成: 画面全体を固定し、本文(main)だけをスクロールさせる。
+ * iOSのホーム画面アプリでは position: fixed の要素が起動直後にタップを受け付けない
+ * (一度スクロールするまで当たり判定がずれる)ため、タブバーは固定配置にしない。
+ */
+html, body { height: 100%; overflow: hidden; }
+
 body {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Hiragino Sans', 'Segoe UI', Roboto, sans-serif;
     font-size: 15px;
     line-height: 1.5;
-    min-height: 100vh;
     -webkit-font-smoothing: antialiased;
     -webkit-tap-highlight-color: transparent;
 }
@@ -41,12 +51,9 @@ strong { font-weight: 700; color: var(--text); }
 
 /* ─── Header ─── */
 header {
-    position: sticky;
-    top: 0;
+    flex-shrink: 0;
     z-index: 100;
-    background: rgba(10,11,15,0.82);
-    backdrop-filter: saturate(160%) blur(16px);
-    -webkit-backdrop-filter: saturate(160%) blur(16px);
+    background: var(--bg);
     border-bottom: 1px solid var(--line);
     padding-top: env(safe-area-inset-top);
 }
@@ -83,12 +90,19 @@ header h1 em { font-style: normal; color: var(--accent); }
 
 /* ─── Layout ─── */
 main {
-    max-width: 640px;
-    margin: 0 auto;
-    padding: 16px 16px calc(var(--tabbar-h) + 28px + env(safe-area-inset-bottom));
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
 }
 
-.view { display: none; }
+.view {
+    display: none;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 16px 16px 28px;
+}
 .view.active { display: block; animation: fade 0.2s ease; }
 @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
@@ -416,16 +430,13 @@ details.cpu[open] summary { margin-bottom: 8px; }
 
 /* ─── Tab bar ─── */
 .tabbar {
-    position: fixed;
-    left: 0; right: 0; bottom: 0;
+    flex-shrink: 0;
     z-index: 100;
     height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
     padding-bottom: env(safe-area-inset-bottom);
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    background: rgba(10,11,15,0.85);
-    backdrop-filter: saturate(160%) blur(16px);
-    -webkit-backdrop-filter: saturate(160%) blur(16px);
+    background: var(--bg);
     border-top: 1px solid var(--line);
 }
 .tab {
@@ -446,7 +457,7 @@ details.cpu[open] summary { margin-bottom: 8px; }
 .tab.active { color: var(--accent); }
 
 /* ─── Player modal (bottom sheet) ─── */
-body.modal-open { overflow: hidden; }
+body.modal-open main { overflow: hidden; }
 .modal { position: fixed; inset: 0; z-index: 300; }
 .modal[hidden] { display: none; }
 .modal-backdrop {
@@ -533,6 +544,29 @@ body.modal-open { overflow: hidden; }
 .mstat .l { font-size: 10px; color: var(--muted); margin-top: 1px; font-weight: 600; }
 
 .maction { margin-top: 18px; }
+
+/* ─── Update bar ─── */
+.update-bar {
+    position: fixed;
+    left: 12px; right: 12px;
+    bottom: calc(var(--tabbar-h) + 12px + env(safe-area-inset-bottom));
+    z-index: 150;
+    max-width: 616px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 10px 10px 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,122,26,0.35);
+    background: #1F1712;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.update-bar[hidden] { display: none; }
+.update-bar .btn { padding: 8px 16px; flex-shrink: 0; }
 
 /* ─── Toast ─── */
 .toast {
