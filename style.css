@@ -19,7 +19,7 @@
     --bronze:      #D0915A;
 
     --radius:      16px;
-    --tabbar-h:    58px;
+    --tabbar-h:    50px;
 }
 
 /* ─── Base ─── */
@@ -30,13 +30,12 @@
  * iOSのホーム画面アプリでは position: fixed の要素が起動直後にタップを受け付けない
  * (一度スクロールするまで当たり判定がずれる)ため、タブバーは固定配置にしない。
  */
+/* 高さは 100% で指定する（iOSのホーム画面アプリでは 100vh / 100dvh がステータスバー分短くなり、下に隙間ができる） */
 html, body { height: 100%; overflow: hidden; }
 
 body {
     display: flex;
     flex-direction: column;
-    height: 100vh;
-    height: 100dvh;
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Hiragino Sans', 'Segoe UI', Roboto, sans-serif;
@@ -444,7 +443,8 @@ details.cpu[open] summary { margin-bottom: 8px; }
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 3px;
+    gap: 2px;
+    padding-top: 2px;
     background: none;
     border: none;
     color: var(--faint);
@@ -453,7 +453,7 @@ details.cpu[open] summary { margin-bottom: 8px; }
     cursor: pointer;
     transition: color 0.15s;
 }
-.tab svg { width: 22px; height: 22px; }
+.tab svg { width: 24px; height: 24px; }
 .tab.active { color: var(--accent); }
 
 /* ─── Player modal (bottom sheet) ─── */
