@@ -54,7 +54,8 @@ header {
     z-index: 100;
     background: var(--bg);
     border-bottom: 1px solid var(--line);
-    padding-top: env(safe-area-inset-top);
+    /* iOSはステータスバーの下に自動でぼかしをかけるため、その範囲より下まで余白をとる */
+    padding-top: calc(env(safe-area-inset-top) + 10px);
 }
 
 .header-inner {
