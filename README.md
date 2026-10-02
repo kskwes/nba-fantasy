@@ -1,6 +1,7 @@
 # NBA Fantasy
 
 自分専用のシンプルなNBAファンタジー。サーバー不要の静的サイトで、GitHub Pages でそのまま動きます。
+
 https://kskwes.github.io/nba-fantasy/
 
 ## ルール
