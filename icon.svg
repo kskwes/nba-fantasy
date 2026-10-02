@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#17408B"/>
+  <rect y="400" width="512" height="112" fill="#C9082A"/>
+  <circle cx="256" cy="230" r="150" fill="#F58426"/>
+  <g fill="none" stroke="#1a1a1a" stroke-width="12">
+    <circle cx="256" cy="230" r="150"/>
+    <line x1="106" y1="230" x2="406" y2="230"/>
+    <line x1="256" y1="80" x2="256" y2="380"/>
+    <path d="M150 124 Q210 230 150 336"/>
+    <path d="M362 124 Q302 230 362 336"/>
+  </g>
+  <text x="256" y="478" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-weight="900" font-size="72" fill="#fff" letter-spacing="6">FANTASY</text>
+</svg>
