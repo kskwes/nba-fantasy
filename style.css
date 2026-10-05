@@ -1,25 +1,32 @@
-/* ─── Tokens ─── */
+/* ─── Tokens（/nba 配下の Broadcast テーマに合わせる） ─── */
 :root {
-    --bg:          #0A0B0F;
-    --surface:     #13151C;
-    --surface2:    #1B1E27;
-    --surface3:    #252935;
-    --line:        rgba(255,255,255,0.07);
-    --text:        #F2F3F5;
-    --muted:       #8A8F9C;
-    --faint:       #5A5F6B;
+    --bg:          #0a0a0c;
+    --surface:     #141418;
+    --surface2:    #1d1d22;
+    --surface3:    #26262d;
+    --surface-deep: #0f0f12;
+    --header-bg:   #111114;
+    --line:        #26262d;
+    --line-soft:   #1f1f25;
+    --text:        #f2f2f4;
+    --text-dim:    #c9c9d1;
+    --muted:       #8b8b95;
+    --faint:       #5c5c66;
 
-    --accent:      #FF7A1A;
-    --accent-soft: rgba(255,122,26,0.14);
+    --accent:      #F5B700;
+    --on-accent:   #141000;
+    --accent-soft: rgba(245,183,0,0.14);
 
-    --win:         #3DD68C;
-    --lose:        #FF5C5C;
+    --win:         #3ddc84;
+    --lose:        #ff6b61;
+    --live:        #ff4d42;
     --gold:        #F5C451;
     --silver:      #C3C9D6;
     --bronze:      #D0915A;
 
-    --radius:      16px;
-    --tabbar-h:    50px;
+    --font-score:  'Oswald', 'Arial Narrow', sans-serif;
+    --radius:      12px;
+    --tabbar-h:    56px;
 }
 
 /* ─── Base ─── */
@@ -39,7 +46,7 @@ body {
     position: relative;  /* モーダル・トーストの基準（fixed を使わない） */
     background: var(--bg);
     color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Hiragino Sans', 'Segoe UI', Roboto, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Segoe UI', Roboto, sans-serif;
     font-size: 15px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
@@ -53,7 +60,7 @@ strong { font-weight: 700; color: var(--text); }
 header {
     flex-shrink: 0;
     z-index: 100;
-    background: #000;  /* ステータスバー（black）と色をそろえる */
+    background: var(--header-bg);
     border-bottom: 1px solid var(--line);
     /* iOSはホーム画面アプリの最上部に自動でぼかしをかける（Safariでは出ない）。
        実機で試して 8px ではまだかかり、12px では離れすぎたため 10px にした */
@@ -63,24 +70,31 @@ header {
 .header-inner {
     max-width: 640px;
     margin: 0 auto;
-    padding: 12px 16px;
+    padding: 8px 14px 10px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
 }
 
-header h1 { font-size: 19px; font-weight: 800; letter-spacing: -0.3px; }
+header h1 {
+    font-family: var(--font-score);
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    line-height: 1.3;
+}
 header h1 em { font-style: normal; color: var(--accent); }
-.header-sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.header-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
 
 .refresh-btn {
-    width: 36px; height: 36px;
+    width: 32px; height: 32px;
     flex-shrink: 0;
     display: grid;
     place-items: center;
-    border-radius: 50%;
-    border: none;
+    border-radius: 8px;
+    border: 1px solid var(--line);
     background: var(--surface2);
     color: var(--muted);
     cursor: pointer;
@@ -122,9 +136,9 @@ main {
     align-items: center;
     gap: 8px;
     margin-bottom: 12px;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--muted);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
 }
 .card-aside { font-size: 11px; font-weight: 500; color: var(--faint); }
 
@@ -149,15 +163,15 @@ main {
     display: inline-block;
     border: 1px solid var(--line);
     background: var(--surface2);
-    border-radius: 12px;
+    border-radius: 10px;
     padding: 12px 16px;
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 700;
     cursor: pointer;
     transition: background 0.15s, opacity 0.15s;
 }
 .btn:active { background: var(--surface3); }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .btn.primary:active { opacity: 0.85; }
 .btn.danger  { background: transparent; border-color: rgba(255,92,92,0.4); color: var(--lose); }
 .btn.block   { display: block; width: 100%; text-align: center; }
@@ -182,8 +196,9 @@ main {
 /* ─── Badges ─── */
 .badge {
     display: inline-block;
-    padding: 2px 8px;
-    border-radius: 999px;
+    padding: 2px 9px;
+    border-radius: 20px;
+    border: 1px solid var(--line);
     background: var(--surface2);
     color: var(--muted);
     font-size: 11px;
@@ -192,13 +207,13 @@ main {
     white-space: nowrap;
     vertical-align: middle;
 }
-.badge.win    { background: rgba(61,214,140,0.14); color: var(--win); }
-.badge.lose   { background: rgba(255,92,92,0.14);  color: var(--lose); }
-.badge.live   { background: var(--accent-soft);    color: var(--accent); }
-.badge.accent { background: var(--accent-soft);    color: var(--accent); }
-.badge.gold   { background: rgba(245,196,81,0.16); color: var(--gold); }
-.badge.silver { background: rgba(195,201,214,0.14); color: var(--silver); }
-.badge.bronze { background: rgba(208,145,90,0.16); color: var(--bronze); }
+.badge.win    { background: rgba(61,220,132,0.12); border-color: transparent; color: var(--win); }
+.badge.lose   { background: rgba(255,107,97,0.12); border-color: transparent; color: var(--lose); }
+.badge.live   { background: var(--live); border-color: transparent; color: #fff; }
+.badge.accent { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+.badge.gold   { background: rgba(245,196,81,0.16); border-color: transparent; color: var(--gold); }
+.badge.silver { background: rgba(195,201,214,0.14); border-color: transparent; color: var(--silver); }
+.badge.bronze { background: rgba(208,145,90,0.16); border-color: transparent; color: var(--bronze); }
 
 /* ─── Scoreboard ─── */
 .vs {
@@ -209,10 +224,10 @@ main {
 .vs-side.right { text-align: right; }
 .vs-label { font-size: 12px; color: var(--muted); font-weight: 600; }
 .vs-score {
-    font-size: 40px;
-    font-weight: 800;
-    letter-spacing: -1px;
-    line-height: 1.1;
+    font-family: var(--font-score);
+    font-size: 44px;
+    font-weight: 600;
+    line-height: 1.15;
     font-variant-numeric: tabular-nums;
     color: var(--faint);
 }
@@ -254,8 +269,10 @@ main {
 .target-legend {
     display: flex;
     justify-content: space-between;
-    font-size: 11px;
-    font-weight: 600;
+    font-family: var(--font-score);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
     font-variant-numeric: tabular-nums;
 }
 .target-legend .gold   { color: var(--gold); }
@@ -274,7 +291,7 @@ main {
     cursor: pointer;
     transition: background 0.12s;
 }
-.prow + .prow { border-top: 1px solid var(--line); }
+.prow + .prow { border-top: 1px solid var(--line-soft); }
 .prow:active { background: var(--surface2); }
 @media (hover: hover) { .prow:hover { background: var(--surface2); } }
 
@@ -295,7 +312,7 @@ main {
     margin-left: 4px;
     padding: 0 5px;
     border-radius: 4px;
-    background: rgba(255,92,92,0.14);
+    background: rgba(255,107,97,0.14);
     color: var(--lose);
     font-size: 10px;
     font-weight: 700;
@@ -312,11 +329,11 @@ main {
     text-align: center;
     font-variant-numeric: tabular-nums;
 }
-.gchip.live { background: var(--accent-soft); color: var(--accent); }
+.gchip.live { background: rgba(255,77,66,0.18); color: var(--live); }
 .gchip.todo { background: transparent; border: 1px dashed var(--surface3); color: var(--faint); }
 
 .pright { text-align: right; flex-shrink: 0; }
-.ptotal { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ptotal { font-family: var(--font-score); font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .reason { font-size: 10px; color: var(--faint); margin-top: 1px; }
 
 .empty-slot {
@@ -336,8 +353,8 @@ main {
     gap: 8px;
     text-align: center;
 }
-.stat-box { background: var(--surface2); border-radius: 12px; padding: 12px 4px 10px; }
-.stat-box .v { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+.stat-box { background: var(--surface-deep); border: 1px solid var(--line-soft); border-radius: 10px; padding: 10px 4px 8px; }
+.stat-box .v { font-family: var(--font-score); font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .stat-box .v.over { color: var(--lose); }
 .stat-box .v.tiers { display: flex; justify-content: center; gap: 10px; }
 .stat-box .v.tiers .gold   { color: var(--gold); }
@@ -352,29 +369,27 @@ main {
 .seg {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 4px;
-    padding: 4px;
-    border-radius: 12px;
-    background: var(--surface2);
+    border-bottom: 1px solid var(--line);
 }
 .seg button {
-    padding: 7px 0;
+    padding: 8px 0 7px;
+    margin-bottom: -1px;
     border: none;
-    border-radius: 9px;
+    border-bottom: 2px solid transparent;
     background: transparent;
     color: var(--muted);
-    font-size: 14px;
+    font-size: 13.5px;
     font-weight: 700;
     cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+    transition: color 0.15s, border-color 0.15s;
 }
 .seg button small { display: block; font-size: 10px; font-weight: 500; }
-.seg button.active { background: var(--surface3); color: var(--text); }
+.seg button.active { color: var(--text); border-bottom-color: var(--accent); }
 input[type="search"], select {
     width: 100%;
-    background: var(--surface2);
-    border: 1px solid transparent;
-    border-radius: 12px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
     color: var(--text);
     padding: 11px 14px;
     font-size: 16px; /* iOSのズーム防止 */
@@ -387,7 +402,7 @@ input[type="search"]:focus, select:focus { border-color: var(--accent); }
 input::placeholder { color: var(--faint); }
 select {
     font-size: 14px;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238A8F9C' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8b95' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 12px center;
     background-size: 16px;
@@ -395,7 +410,7 @@ select {
 }
 
 /* ─── History ─── */
-details.week + details.week { border-top: 1px solid var(--line); }
+details.week + details.week { border-top: 1px solid var(--line-soft); }
 details.week summary {
     list-style: none;
     display: flex;
@@ -407,7 +422,7 @@ details.week summary {
 details.week summary::-webkit-details-marker { display: none; }
 details.week[open] summary { padding-bottom: 6px; }
 .wk-label { flex: 1; font-size: 13px; color: var(--muted); }
-.wk-score { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.wk-score { font-family: var(--font-score); font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
 details.cpu summary {
     list-style: none;
@@ -438,26 +453,25 @@ details.cpu[open] summary { margin-bottom: 8px; }
     padding-bottom: env(safe-area-inset-bottom);
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    background: var(--bg);
+    background: var(--header-bg);
     border-top: 1px solid var(--line);
 }
 .tab {
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
-    padding-top: 2px;
+    height: var(--tabbar-h);
+    margin-top: -1px;
     background: none;
     border: none;
-    color: var(--faint);
-    font-size: 10px;
+    border-top: 2px solid transparent;
+    color: var(--muted);
+    font-size: 12px;
     font-weight: 600;
     cursor: pointer;
     transition: color 0.15s;
 }
-.tab svg { width: 24px; height: 24px; }
-.tab.active { color: var(--accent); }
+.tab.active { color: var(--accent); border-top-color: var(--accent); }
 
 /* ─── Player modal (bottom sheet) ─── */
 body.modal-open main { overflow: hidden; }
@@ -481,7 +495,7 @@ body.modal-open main { overflow: hidden; }
     background: var(--surface);
     border: 1px solid var(--line);
     border-bottom: none;
-    border-radius: 24px 24px 0 0;
+    border-radius: 18px 18px 0 0;
     padding: 24px 20px calc(20px + env(safe-area-inset-bottom));
     transform: translateY(100%);
     transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -523,7 +537,7 @@ body.modal-open main { overflow: hidden; }
 .mhead-body { flex: 1; min-width: 0; }
 .mname { font-size: 20px; font-weight: 800; letter-spacing: -0.3px; line-height: 1.25; }
 .mmeta { font-size: 13px; color: var(--muted); margin-top: 2px; }
-.mprice { font-size: 22px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+.mprice { font-family: var(--font-score); font-size: 26px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
 
 .msection {
     margin: 20px 0 10px;
@@ -537,13 +551,14 @@ body.modal-open main { overflow: hidden; }
 .mgrid-4 { grid-template-columns: repeat(4, 1fr); }
 .mgrid-6 { grid-template-columns: repeat(6, 1fr); }
 .mstat {
-    background: var(--surface2);
-    border-radius: 10px;
+    background: var(--surface-deep);
+    border: 1px solid var(--line-soft);
+    border-radius: 8px;
     padding: 10px 2px 8px;
     text-align: center;
 }
-.mstat .v { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.mgrid-3 .mstat .v { font-size: 20px; }
+.mstat .v { font-family: var(--font-score); font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mgrid-3 .mstat .v { font-size: 22px; }
 .mstat .l { font-size: 10px; color: var(--muted); margin-top: 1px; font-weight: 600; }
 
 .maction { margin-top: 18px; }
@@ -559,9 +574,9 @@ body.modal-open main { overflow: hidden; }
     justify-content: space-between;
     gap: 12px;
     padding: 10px 10px 10px 16px;
-    border-radius: 14px;
-    border: 1px solid rgba(255,122,26,0.35);
-    background: #1F1712;
+    border-radius: 10px;
+    border: 1px solid rgba(245,183,0,0.4);
+    background: #1a170c;
     font-size: 13px;
     font-weight: 600;
 }
