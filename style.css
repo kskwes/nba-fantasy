@@ -62,9 +62,7 @@ header {
     z-index: 100;
     background: var(--header-bg);
     border-bottom: 1px solid var(--line);
-    /* iOSはホーム画面アプリの最上部に自動でぼかしをかける（Safariでは出ない）。
-       実機で試して 8px ではまだかかり、12px では離れすぎたため 10px にした */
-    padding-top: calc(env(safe-area-inset-top) + 10px);
+    padding-top: env(safe-area-inset-top);
 }
 
 .header-inner {

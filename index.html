@@ -2,13 +2,14 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <!-- viewport-fit=cover は付けない（付けるとステータスバーの裏まで描画され、iOSが上端にぼかしをかける） -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#111114">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <meta name="apple-mobile-web-app-title" content="NBA Fantasy">
     <!-- 修正をアップするたびに、この番号と下の style.css / app.js の ?v= を同じ値に上げる -->
-    <meta name="app-version" content="2.0">
+    <meta name="app-version" content="2.1">
     <title>NBA Fantasy</title>
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -16,7 +17,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&display=swap">
-    <link rel="stylesheet" href="style.css?v=2.0">
+    <link rel="stylesheet" href="style.css?v=2.1">
 </head>
 <body>
     <header>
@@ -63,6 +64,6 @@
 
     <div class="toast" id="toast"></div>
 
-    <script src="app.js?v=2.0"></script>
+    <script src="app.js?v=2.1"></script>
 </body>
 </html>
