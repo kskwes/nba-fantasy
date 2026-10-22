@@ -17,6 +17,8 @@ const CONFIG = {
     ],
 };
 const STAT_KEYS = ['PTS', 'REB', 'AST', 'STL', 'BLK', 'TO'];
+const BOX_KEYS  = [...STAT_KEYS, 'MIN'];  // ボックススコアのキャッシュに残す項目（MIN は直近成績の表示用）
+const RECENT_DAYS = 7;                    // 直近成績の集計期間（今日を含む日数）
 
 const API = {
     SCOREBOARD: 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard',
@@ -39,7 +41,7 @@ const KEYS = {
     state: 'nbaf.state.v1',
     pool:  'nbaf.pool.v2',
     days:  'nbaf.days.v1',
-    boxes: 'nbaf.boxes.v1',
+    boxes: 'nbaf.boxes.v2',  // v2: 出場時間(MIN)と試合開始時刻を追加
 };
 
 function load(key, fallback) {
@@ -256,14 +258,14 @@ async function fetchBox(ev) {
         for (const team of d.boxscore?.players || []) {
             for (const st of team.statistics || []) {
                 const labels = st.labels || st.names || [];
-                const ix = STAT_KEYS.map(k => labels.indexOf(k));
+                const ix = BOX_KEYS.map(k => labels.indexOf(k));
                 for (const a of st.athletes || []) {
                     if (a.didNotPlay || !a.stats?.length) continue;
                     p[String(a.athlete?.id)] = ix.map(i => (i >= 0 ? parseFloat(a.stats[i]) || 0 : 0));
                 }
             }
         }
-        boxCache[ev.id] = { ts: Date.now(), final: ev.state === 'post', p };
+        boxCache[ev.id] = { ts: Date.now(), start: ev.start, final: ev.state === 'post', p };
         save(KEYS.boxes, boxCache);
         return p;
     } catch (e) {
@@ -355,7 +357,8 @@ async function scoreWeek(wk, info) {
         const b = boxes[i];
         if (!b) return;
         for (const [id, line] of Object.entries(b)) {
-            (games[id] ||= []).push({ f: round1(fpts(line)), line, start: e.start, live: e.state === 'in', name: e.name });
+            // 保存する line は従来どおり STAT_KEYS の6項目だけ（state の形式を変えない）
+            (games[id] ||= []).push({ f: round1(fpts(line)), line: line.slice(0, STAT_KEYS.length), start: e.start, live: e.state === 'in', name: e.name });
         }
     });
     const side = list => {
@@ -378,10 +381,115 @@ async function scoreWeek(wk, info) {
     if (final && wk < curWk) {
         w.result = res;
         saveState();
-        info.events.forEach(e => { delete boxCache[e.id]; });
-        save(KEYS.boxes, boxCache);
+        // ボックススコアは直近成績でも使うので、ここでは消さない（古いものは pruneBoxes で消す）
     }
     return res;
+}
+
+// 直近成績の期間より古いボックススコアをキャッシュから消す
+function pruneBoxes() {
+    const limit = Date.now() - (RECENT_DAYS + 2) * 86400e3;
+    let changed = false;
+    for (const [id, b] of Object.entries(boxCache)) {
+        if (!b.start || new Date(b.start).getTime() < limit) {
+            delete boxCache[id];
+            changed = true;
+        }
+    }
+    if (changed) save(KEYS.boxes, boxCache);
+}
+
+/* ─── 直近成績（直近7日の終了した試合のボックススコアから集計） ─── */
+let recent        = null;    // { days, byTeam, boxes, failed, ts }（メモリ上のみ）
+let recentStats   = {};      // athleteId → { gp, teamG, fpg, min, avg, value }
+let recentStatus  = 'idle';  // idle / loading / ok / error
+let recentPromise = null;
+
+// 同時に投げるリクエスト数を抑えて順に処理する
+async function mapLimit(items, limit, fn) {
+    let next = 0;
+    const worker = async () => {
+        while (next < items.length) {
+            const i = next++;
+            await fn(items[i]);
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
+
+async function loadRecent() {
+    const today = etYmd(new Date());
+    const days = Array.from({ length: RECENT_DAYS }, (_, i) => addDays(today, i - RECENT_DAYS + 1));
+    let failed = 0;
+    const perDay = await Promise.all(days.map(d =>
+        fetchDay(d)
+            .then(evs => evs.map(e => ({ ...e, ymd: d })))
+            .catch(() => { failed++; return []; })));
+    if (failed === days.length) throw new Error('日程の取得に失敗しました');
+
+    const events = perDay.flat().filter(e => e.state === 'post');  // 試合中の途中経過は含めない
+    const boxes = {};
+    await mapLimit(events, 6, async e => {
+        const b = await fetchBox(e);
+        if (b) boxes[e.id] = b;
+        else failed++;
+    });
+    const byTeam = {};  // teamId → 取得できた試合（古い順）
+    events
+        .filter(e => boxes[e.id])
+        .sort((a, b) => new Date(a.start) - new Date(b.start))
+        .forEach(e => e.teams.forEach(t => (byTeam[t] ||= []).push(e)));
+    pruneBoxes();
+    return { days, byTeam, boxes, failed, ts: Date.now() };
+}
+
+// 直近成績を用意する（10分以内に集計済みならそのまま使う）
+function ensureRecent() {
+    if (recent && Date.now() - recent.ts < 10 * 60e3) return Promise.resolve(recent);
+    if (!recentPromise) {
+        if (!recent) recentStatus = 'loading';
+        recentPromise = loadRecent()
+            .then(r => {
+                recent = r;
+                recentStats = calcRecentStats();
+                recentStatus = 'ok';
+            })
+            .catch(e => {
+                console.error(e);
+                if (!recent) recentStatus = 'error';
+            })
+            .finally(() => { recentPromise = null; });
+    }
+    return recentPromise;
+}
+
+// 選手のチームの直近の試合と、各試合の成績（出場していなければ dnp）
+function recentGames(p) {
+    if (!recent) return [];
+    return (recent.byTeam[p.teamId] || []).map(e => {
+        const line = recent.boxes[e.id][p.id];
+        return line ? { e, line, f: fpts(line), min: line[6] || 0 } : { e, dnp: true };
+    });
+}
+
+function calcRecentStats() {
+    const out = {};
+    for (const p of pool) {
+        const games = recentGames(p);
+        const played = games.filter(g => !g.dnp);
+        const n = played.length;
+        const avg = k => sum(played.map(g => g.line[k] || 0)) / n;
+        const fpg = n ? sum(played.map(g => g.f)) / n : null;
+        out[p.id] = {
+            gp:    n,
+            teamG: games.length,
+            fpg,
+            min:   n ? avg(6) : 0,
+            avg:   n ? STAT_KEYS.map((_, k) => avg(k)) : null,
+            value: fpg == null ? null : fpg - p.price,  // 割安度
+        };
+    }
+    return out;
 }
 
 // 起動時・復帰時に呼ぶ: 未処理の週をロックし、終わった週を確定させる
@@ -409,6 +517,8 @@ async function sync(forcePool = false) {
     const done = isLocked(weekInfo[curWk]) ? curWk : addDays(curWk, -7);
     if (!state.lastWeek || done > state.lastWeek) state.lastWeek = done;
     saveState();
+    pruneBoxes();
+    if (recent) recentStats = calcRecentStats();  // 選手データを取り直したときの移籍に追従
     lastSync = Date.now();
 }
 
@@ -486,6 +596,40 @@ function injTag(status) {
     if (!status) return '';
     const short = status === 'Day-To-Day' ? 'DTD' : status;
     return ` <span class="inj">${esc(short)}</span>`;
+}
+
+// 割安度などの差分: +5.2 / −3.1 / ±0.0
+function signed(x) {
+    const v = Math.round(x * 10) / 10;
+    return `${v > 0 ? '+' : v < 0 ? '−' : '±'}${Math.abs(v).toFixed(1)}`;
+}
+
+// 割安度の色分け（差が3点未満は「ほぼ値段どおり」）
+function valClass(v) {
+    if (v == null) return 'flat';
+    return v >= 3 ? 'up' : v <= -3 ? 'down' : 'flat';
+}
+
+// 編成タブの各行に出す、直近の成績の1行
+function recentLine(id) {
+    if (recentStatus === 'idle' || recentStatus === 'loading') return '<div class="recent"><span class="lbl">直近 読み込み中…</span></div>';
+    if (recentStatus === 'error') return '<div class="recent"><span class="lbl">直近 取得できませんでした</span></div>';
+    const r = recentStats[id];
+    if (!r || r.fpg == null) {
+        const gp = r?.teamG ? `<span class="gp low">出場 0/${r.teamG}</span>` : '';
+        return `<div class="recent"><span class="lbl">直近</span><span>−</span>${gp}</div>`;
+    }
+    return `
+        <div class="recent">
+            <span class="lbl">直近</span><span class="fp">${fmt1(r.fpg)}</span>
+            <span class="val ${valClass(r.value)}">${signed(r.value)}</span>
+            <span class="gp ${r.gp < r.teamG ? 'low' : ''}">出場 ${r.gp}/${r.teamG}</span>
+        </div>`;
+}
+
+// 編成を適用する週の試合数（2試合以下は外す候補として赤字）
+function wkGamesTag(n, label) {
+    return `${label} <span class="wk ${n <= 2 ? 'low' : ''}">${n}試合</span>`;
 }
 
 function gameChips(p) {
@@ -597,18 +741,12 @@ async function renderWeek() {
 /* ─── 編成タブ ─── */
 const search = { q: '', team: '', pos: '', sort: 'price-desc' };
 const POSITIONS = [['G', 'ガード'], ['F', 'フォワード'], ['C', 'センター']];
+let teamCtx = null;  // 編成タブの描画に使う { gamesOf, wkLabel }
 
-async function renderTeam() {
-    const el = document.getElementById('view-team');
-    const tInfo = await pendingTargetWeek().catch(() => null);
-    const targetWk = tInfo?.wk || curWk;
-    const gamesOf = teamId => tInfo?.teamGames[teamId] ?? 0;
-
-    const cost = pendingCost();
+function rosterRows() {
+    const { gamesOf, wkLabel } = teamCtx;
     const base = swapBase();
-    const swapsLeft = base ? CONFIG.MAX_SWAPS - swapsUsed() : null;
     const baseIds = new Set((base || []).map(p => p.id));
-
     const slots = state.pending.map(p => {
         const pp = poolById[p.id];
         const isNew = base && !baseIds.has(p.id);
@@ -617,13 +755,28 @@ async function renderTeam() {
                 ${photoImg(p.id)}
                 <div class="pbody">
                     <div class="pname">${esc(p.name)}${isNew ? ' <span class="badge accent">NEW</span>' : ''}</div>
-                    <div class="pmeta">${esc(abbr(p.team))} · 前季 ${pp?.fpg != null ? fmt1(pp.fpg) : '−'} · ${gamesOf(p.teamId)}試合${injTag(pp?.inj)}</div>
+                    <div class="pmeta">${esc(abbr(p.team))} · 前季 ${pp?.fpg != null ? fmt1(pp.fpg) : '−'} · ${wkGamesTag(gamesOf(p.teamId), wkLabel)}${injTag(pp?.inj)}</div>
+                    ${recentLine(p.id)}
                 </div>
                 <div class="pright"><div class="ptotal">$${p.price}</div></div>
                 <button class="icon-btn" data-remove="${esc(p.id)}" aria-label="外す">×</button>
             </div>`;
     });
     for (let i = state.pending.length; i < CONFIG.ROSTER_SIZE; i++) slots.push('<div class="empty-slot">空き枠</div>');
+    return slots.join('');
+}
+
+async function renderTeam() {
+    const el = document.getElementById('view-team');
+    const tInfo = await pendingTargetWeek().catch(() => null);
+    const targetWk = tInfo?.wk || curWk;
+    const gamesOf = teamId => tInfo?.teamGames[teamId] ?? 0;
+    const wkLabel = targetWk === curWk ? '今週' : targetWk === addDays(curWk, 7) ? '来週' : `${fmtMd(targetWk)}〜の週`;
+    teamCtx = { gamesOf, wkLabel };
+
+    const cost = pendingCost();
+    const base = swapBase();
+    const swapsLeft = base ? CONFIG.MAX_SWAPS - swapsUsed() : null;
 
     const teams = [...new Set(pool.map(p => p.team))].sort();
     el.innerHTML = `
@@ -638,7 +791,7 @@ async function renderTeam() {
         </div>
         <div class="card">
             <div class="card-title">ロスター</div>
-            <div class="plist">${slots.join('')}</div>
+            <div class="plist" id="roster-list">${rosterRows()}</div>
         </div>
         <div class="card">
             <div class="card-title">選手を探す <span class="card-aside">試合数は ${fmtWeek(targetWk)}</span></div>
@@ -655,6 +808,8 @@ async function renderTeam() {
                     <option value="price-desc" ${search.sort === 'price-desc' ? 'selected' : ''}>価格 高い順</option>
                     <option value="price-asc"  ${search.sort === 'price-asc'  ? 'selected' : ''}>価格 安い順</option>
                     <option value="games"      ${search.sort === 'games'      ? 'selected' : ''}>試合数 多い順</option>
+                    <option value="recent"     ${search.sort === 'recent'     ? 'selected' : ''}>直近FPTS 高い順</option>
+                    <option value="value"      ${search.sort === 'value'      ? 'selected' : ''}>割安度 高い順</option>
                 </select>
             </div>
             <div class="plist" id="s-results"></div>
@@ -671,7 +826,19 @@ async function renderTeam() {
         renderSearchResults(gamesOf);
     });
     document.getElementById('s-sort').addEventListener('change', e => { search.sort = e.target.value; renderSearchResults(gamesOf); });
+
+    // 直近成績は後から読み込み、行の中身だけ差し替える（入力中の検索欄を消さないため）
+    if (!recent || Date.now() - recent.ts >= 10 * 60e3) {
+        ensureRecent().then(() => {
+            if (activeView !== 'team' || teamCtx?.gamesOf !== gamesOf) return;
+            document.getElementById('roster-list').innerHTML = rosterRows();
+            renderSearchResults(gamesOf);
+        });
+    }
 }
+
+// 直近の成績がない選手は、直近系の並び替えで最後に回す
+const byRecent = key => (a, b) => (recentStats[b.id]?.[key] ?? -Infinity) - (recentStats[a.id]?.[key] ?? -Infinity) || b.price - a.price;
 
 function renderSearchResults(gamesOf) {
     const q = search.q.trim().toLowerCase();
@@ -681,6 +848,8 @@ function renderSearchResults(gamesOf) {
         'price-desc': (a, b) => b.price - a.price,
         'price-asc':  (a, b) => a.price - b.price,
         'games':      (a, b) => gamesOf(b.teamId) - gamesOf(a.teamId) || b.price - a.price,
+        'recent':     byRecent('fpg'),
+        'value':      byRecent('value'),
     }[search.sort];
     list.sort(cmp);
     const shown = list.slice(0, 60);
@@ -693,7 +862,8 @@ function renderSearchResults(gamesOf) {
                 ${photoImg(p.id)}
                 <div class="pbody">
                     <div class="pname">${esc(p.name)}</div>
-                    <div class="pmeta">${esc(abbr(p.team))} ${esc(p.pos)} · 前季 ${p.fpg != null ? fmt1(p.fpg) : '−'} · ${gamesOf(p.teamId)}試合${injTag(p.inj)}</div>
+                    <div class="pmeta">${esc(abbr(p.team))} ${esc(p.pos)} · 前季 ${p.fpg != null ? fmt1(p.fpg) : '−'} · ${wkGamesTag(gamesOf(p.teamId), teamCtx.wkLabel)}${injTag(p.inj)}</div>
+                    ${recentLine(p.id)}
                 </div>
                 <div class="pright">
                     <div class="ptotal">$${p.price}</div>
@@ -825,8 +995,71 @@ function importData(e) {
     e.target.value = '';
 }
 
-/* ─── 選手モーダル（前季スタッツ） ─── */
+/* ─── 選手モーダル（直近成績・前季スタッツ） ─── */
+let modalPlayerId = null;
+
+// 直近7日の平均と試合ごとの一覧
+function recentSectionHtml(p) {
+    const range = recent ? ` · ${fmtMd(recent.days[0])}〜${fmtMd(recent.days[recent.days.length - 1])}` : '';
+    const head = aside => `<div class="msection"><span>直近${RECENT_DAYS}日${range}</span>${aside ? `<b>${aside}</b>` : ''}</div>`;
+    if (recentStatus === 'error') return `${head()}<div class="note">直近の成績を取得できませんでした。時間をおいて更新してください。</div>`;
+    if (!recent) return `${head()}<div class="note">読み込み中…</div>`;
+
+    const r = recentStats[p.id];
+    const games = recentGames(p);
+    const failedNote = recent.failed ? `<div class="note">一部の試合を取得できなかったため、取得できた試合だけで計算しています。</div>` : '';
+    if (!games.length) return `${head()}<div class="note">この期間にチームの試合がありません。</div>${failedNote}`;
+
+    const cell = (label, v, cls = '') => `<div class="mstat"><div class="v ${cls}">${v}</div><div class="l">${label}</div></div>`;
+    const summary = r?.fpg != null
+        ? `
+            <div class="mgrid mgrid-3">
+                ${cell('平均MIN', fmt1(r.min))}
+                ${cell('FPTS', fmt1(r.fpg))}
+                ${cell('割安度', signed(r.value), valClass(r.value) === 'flat' ? '' : valClass(r.value))}
+            </div>
+            <div class="mgrid mgrid-6">
+                ${STAT_KEYS.map((k, i) => cell(k, fmt1(r.avg[i]))).join('')}
+            </div>`
+        : '<div class="note">この期間は出場していません。</div>';
+
+    // 棒の長さは FPTS、黄色い線は値段の位置
+    const max = Math.max(p.price * 1.6, ...games.map(g => g.f || 0), 10);
+    const pct = v => `${Math.min(100, Math.max(0, v) / max * 100).toFixed(1)}%`;
+    const labels = ['点', 'リバ', 'アシ', 'スティ', 'ブロ', 'TO'];
+    const rows = [...games].reverse().map(g => {
+        if (g.dnp) {
+            return `
+                <div class="grow dnp">
+                    <span class="d">${fmtMd(g.e.ymd)}</span>
+                    <span class="m"><div class="opp">${esc(g.e.name)}<small>出場なし</small></div></span>
+                    <span class="f">−</span>
+                </div>`;
+        }
+        const parts = STAT_KEYS.map((_, k) => (g.line[k] ? `${g.line[k]}${labels[k]}` : '')).filter(Boolean).join(' ');
+        const cls = valClass(g.f - p.price);
+        return `
+            <div class="grow">
+                <span class="d">${fmtMd(g.e.ymd)}</span>
+                <span class="m"><div class="opp">${esc(g.e.name)}<small>${Math.round(g.min)}分</small></div><div class="line">${parts}</div></span>
+                <span class="f">${fmt1(g.f)}</span>
+                <span class="bar"><i class="${cls}" style="width:${pct(g.f)}"></i><b style="left:${pct(p.price)}"></b></span>
+            </div>`;
+    }).join('');
+
+    return `
+        ${head(`出場 ${r?.gp || 0}/${games.length}試合`)}
+        ${summary}
+        <div class="glog">
+            <div class="ghead"><span>日付</span><span>対戦・出場時間</span><span>FPTS</span></div>
+            ${rows}
+        </div>
+        <div class="barkey"><b></b>値段（$${p.price}）の位置。棒が線を超えた試合は値段以上に稼いでいます</div>
+        ${failedNote}`;
+}
+
 function openPlayer(id) {
+    modalPlayerId = id;
     const p = poolById[id];
     const meta = p || Object.values(state.weeks).flatMap(w => [...w.roster, ...w.cpu]).find(x => x.id === id);
     if (!meta) return;
@@ -869,6 +1102,7 @@ function openPlayer(id) {
             </div>
             <div class="mprice">$${meta.price}</div>
         </div>
+        ${p ? `<div id="m-recent">${recentSectionHtml(p)}</div>` : ''}
         <div class="msection">${season} シーズン平均</div>
         ${statsHtml}
         <div class="maction">${action}</div>`;
@@ -876,9 +1110,18 @@ function openPlayer(id) {
     m.hidden = false;
     document.body.classList.add('modal-open');
     requestAnimationFrame(() => m.classList.add('open'));
+
+    // 直近成績がまだなければ読み込み、同じ選手を表示中なら差し替える
+    if (p && !recent) {
+        ensureRecent().then(() => {
+            const box = document.getElementById('m-recent');
+            if (box && modalPlayerId === id && !m.hidden) box.innerHTML = recentSectionHtml(p);
+        });
+    }
 }
 
 function closePlayer() {
+    modalPlayerId = null;
     const m = document.getElementById('modal');
     m.classList.remove('open');
     document.body.classList.remove('modal-open');
@@ -886,8 +1129,11 @@ function closePlayer() {
 }
 
 /* ─── アプリの更新（ホーム画面アプリには再読み込みボタンがないため） ─── */
-// 一時的な余白調整機能（v1.8）で保存した値を掃除する
-try { localStorage.removeItem('nbaf.headerExtra'); } catch (e) { /* noop */ }
+// 一時的な余白調整機能（v1.8）で保存した値と、v2.2 までのボックススコアのキャッシュを掃除する
+try {
+    localStorage.removeItem('nbaf.headerExtra');
+    localStorage.removeItem('nbaf.boxes.v1');
+} catch (e) { /* noop */ }
 
 const APP_VERSION = document.querySelector('meta[name="app-version"]')?.content || '';
 let latestVersion = null;
@@ -921,10 +1167,110 @@ async function hardReload() {
     location.replace(`${location.pathname}?v=${encodeURIComponent(ver)}&t=${Date.now()}`);
 }
 
+/* ─── 遊び方ページ（ヘッダーの「?」から開く） ─── */
+function renderHelp() {
+    const el = document.getElementById('view-help');
+    const s = CONFIG.SCORING;
+    const par = CONFIG.BUDGET / CONFIG.ROSTER_SIZE;  // 値段どおりに活躍したときの1人1試合の点数
+    const tier = key => CONFIG.TIERS.find(t => t.key === key);
+    const ex = [20, 5, 5, 1, 1, 2];
+    const marks = [
+        ...CONFIG.TIERS.map(t => ({ v: t.base, label: t.label, cls: t.key })),
+        { v: par, label: '値段どおり', cls: 'par' },
+    ];
+    const lo = Math.min(...marks.map(m => m.v)) - 3;
+    const hi = Math.max(...marks.map(m => m.v)) + 3;
+    const pos = v => `${((v - lo) / (hi - lo) * 100).toFixed(1)}%`;
+    const coef = v => (v < 0 ? `−${Math.abs(v)}` : `×${v}`);
+    const num = v => fmt1(v).replace(/\.0$/, '');
+    const exTerms = STAT_KEYS.map((k, i) => ex[i] * s[k])
+        .map((t, i) => (i === 0 ? num(t) : `${t < 0 ? ' − ' : ' + '}${num(Math.abs(t))}`)).join('');
+
+    el.innerHTML = `
+        <button class="back-btn" data-view="${esc(prevView)}">‹ 戻る</button>
+        <div class="card guide">
+            <div class="card-title">このゲームの目的</div>
+            <p>予算 $${CONFIG.BUDGET} で${CONFIG.ROSTER_SIZE}人を選び、1週間（月〜日）に${CONFIG.ROSTER_SIZE}人が稼いだファンタジーポイント（FPTS）の合計で勝負します。</p>
+            <p>毎週ランダムに組まれる CPU チームとの勝ち負けに加えて、${CONFIG.TIERS.map(t => t.label).reverse().join(' / ')} の目標スコアを目指します。</p>
+        </div>
+
+        <div class="card guide">
+            <div class="card-title">得点の計算</div>
+            <div class="score-grid">
+                <div><b>${coef(s.PTS)}</b><span>得点 PTS</span></div>
+                <div><b>${coef(s.REB)}</b><span>リバウンド REB</span></div>
+                <div><b>${coef(s.AST)}</b><span>アシスト AST</span></div>
+                <div><b>${coef(s.STL)}</b><span>スティール STL</span></div>
+                <div><b>${coef(s.BLK)}</b><span>ブロック BLK</span></div>
+                <div><b class="neg">${coef(s.TO)}</b><span>ターンオーバー TO</span></div>
+            </div>
+            <p class="ex">例：${ex[0]}点 ${ex[1]}リバ ${ex[2]}アシ ${ex[3]}スティール ${ex[4]}ブロック ${ex[5]}TO<br>
+                = ${exTerms} = <b>${fmt1(fpts(ex))}</b></p>
+        </div>
+
+        <div class="card guide">
+            <div class="card-title">値段の意味</div>
+            <p>値段は<b>前シーズンの1試合平均FPTS</b>です。$30 の選手は、前季に1試合30点稼いだ選手です。</p>
+            <p>$${CONFIG.BUDGET} を${CONFIG.ROSTER_SIZE}人で割ると1人 $${num(par)}。全員が値段どおりに活躍すると、1人1試合${num(par)}点になり、${tier('silver').label} に届きません。</p>
+            <div class="tier-scale" aria-hidden="true">
+                <div class="ts-track" style="--par:${pos(par)}"></div>
+                ${marks.map(m => `<span class="ts-mark ${m.cls}" style="left:${pos(m.v)}"><i></i>${m.cls === 'par' ? `${m.label} ${num(m.v)}` : `${num(m.v)}<br>${m.label}`}</span>`).join('')}
+            </div>
+            <p class="note">1人1試合あたりの点数。目標スコアは「${CONFIG.ROSTER_SIZE}人 × その週の平均試合数 × この数字」です。</p>
+            <p>上を目指すには、<b>値段（前季の実績）より今季たくさん稼ぐ選手</b>を見つけることが必要です。</p>
+        </div>
+
+        <div class="card guide">
+            <div class="card-title">選手選びのコツ</div>
+            <ol class="tips">
+                <li><b>割安度を見る</b>直近の平均FPTS − 値段。プラスが大きいほど、値段以上に稼いでいます。並び替え「割安度 高い順」が便利です。</li>
+                <li><b>出場時間が増えた選手を狙う</b>スタメン昇格、移籍、主力のケガなど。安い選手ほど伸びたときの効果が大きくなります。</li>
+                <li><b>スティールとブロックは1つ${s.STL}点</b>得点が少なくても、守備の強い選手は見た目以上に稼ぎます。</li>
+                <li><b>FG%・3P%・FT% は関係なし</b>選手画面に出ていますが、得点の計算には使いません。</li>
+                <li><b>新人は一律 $${CONFIG.NO_DATA_PRICE}</b>前季のデータがないためです。活躍している新人は掘り出し物です。</li>
+            </ol>
+        </div>
+
+        <div class="card guide">
+            <div class="card-title">毎週の入れ替え（週${CONFIG.MAX_SWAPS}人まで）</div>
+            <ol class="tips">
+                <li><b>試合数を見る</b>週の合計で競うので、4試合ある選手は2試合の選手の約2倍稼ぎます。「来週 2試合」のように赤字の選手が外す候補です。</li>
+                <li><b>調子より試合数を優先</b>少し調子が悪い選手より、試合が少ない選手を外すほうが効くことが多いです。</li>
+                <li><b>ケガを確認</b><span class="inj">Out</span> の選手はその週0点です。<span class="inj">DTD</span> は出るかどうか直前まで分かりません。</li>
+                <li><b>締め切りに注意</b>その週の最初の試合開始でロスターが確定します。時刻はヘッダーの「ロック」に出ます。確定後の変更は翌週分になります。</li>
+            </ol>
+        </div>
+
+        <div class="card guide">
+            <div class="card-title">編成画面の見方</div>
+            <div class="anatomy">
+                <div class="prow">
+                    <div class="photo"></div>
+                    <div class="pbody">
+                        <div class="pname">選手名</div>
+                        <div class="pmeta">MIA C · 前季 18.4 · ${wkGamesTag(4, '来週')}</div>
+                        <div class="recent"><span class="lbl">直近</span><span class="fp">34.2</span><span class="val up">+16.2</span><span class="gp low">出場 3/4</span></div>
+                    </div>
+                    <div class="pright"><div class="ptotal">$18</div></div>
+                </div>
+            </div>
+            <dl class="defs">
+                <dt>$18</dt><dd>値段（前季の1試合平均FPTS）</dd>
+                <dt>前季 18.4</dt><dd>前季の1試合平均FPTS（値段の元の数字）</dd>
+                <dt>来週 4試合</dt><dd>編成を適用する週の試合数。ロック前は「今週」と表示</dd>
+                <dt>直近 34.2</dt><dd>直近${RECENT_DAYS}日の1試合平均FPTS</dd>
+                <dt>+16.2</dt><dd>割安度（直近平均 − 値段）。緑はプラス、赤はマイナス</dd>
+                <dt>出場 3/4</dt><dd>直近${RECENT_DAYS}日のチームの試合のうち、出場した試合数</dd>
+            </dl>
+        </div>`;
+}
+
 /* ─── 画面制御 ─── */
 let activeView = 'week';
+let prevView   = 'week';  // 遊び方ページから戻る先
 
 function showView(name) {
+    if (name === 'help' && activeView !== 'help') prevView = activeView;
     activeView = name;
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${name}`));
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === name));
@@ -933,6 +1279,7 @@ function showView(name) {
 }
 
 async function renderActive() {
+    if (activeView === 'help') { renderHelp(); return; }  // データがなくても読める
     if (!curWk) return;  // 初回の同期に失敗している
     try {
         if (activeView === 'week')     await renderWeek();
