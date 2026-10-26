@@ -128,6 +128,10 @@ function mondayOf(ymd) {
 function weekDays(wk) { return [0, 1, 2, 3, 4, 5, 6].map(i => addDays(wk, i)); }
 function fmtMd(ymd) { return `${+ymd.slice(4, 6)}/${+ymd.slice(6, 8)}`; }
 function fmtWeek(wk) { return `${fmtMd(wk)}〜${fmtMd(addDays(wk, 6))}`; }
+// 試合開始時刻（ISO）→ 日本時間の「月/日」
+function fmtJstMd(iso) {
+    return new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric' }).format(new Date(iso));
+}
 function fmtJst(iso) {
     return new Intl.DateTimeFormat('ja-JP', {
         timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit',
@@ -692,7 +696,7 @@ async function renderWeek() {
     const w = state.weeks[curWk];
 
     if (!w) {
-        let html = `<div class="card"><div class="card-title">今週 ${fmtWeek(curWk)}</div>`;
+        let html = `<div class="card"><div class="card-title">今週 ${fmtWeek(curWk)}（現地）</div>`;
         if (!info?.events.length) {
             const next = await pendingTargetWeek().catch(() => null);
             html += `<div class="msg">今週は公式戦がありません。`;
@@ -1000,7 +1004,7 @@ let modalPlayerId = null;
 
 // 直近7日の平均と試合ごとの一覧
 function recentSectionHtml(p) {
-    const range = recent ? ` · ${fmtMd(recent.days[0])}〜${fmtMd(recent.days[recent.days.length - 1])}` : '';
+    const range = recent ? ` · 現地 ${fmtMd(recent.days[0])}〜${fmtMd(recent.days[recent.days.length - 1])}` : '';
     const head = aside => `<div class="msection"><span>直近${RECENT_DAYS}日${range}</span>${aside ? `<b>${aside}</b>` : ''}</div>`;
     if (recentStatus === 'error') return `${head()}<div class="note">直近の成績を取得できませんでした。時間をおいて更新してください。</div>`;
     if (!recent) return `${head()}<div class="note">読み込み中…</div>`;
@@ -1031,7 +1035,7 @@ function recentSectionHtml(p) {
         if (g.dnp) {
             return `
                 <div class="grow dnp">
-                    <span class="d">${fmtMd(g.e.ymd)}</span>
+                    <span class="d">${fmtJstMd(g.e.start)}</span>
                     <span class="m"><div class="opp">${esc(g.e.name)}<small>出場なし</small></div></span>
                     <span class="f">−</span>
                 </div>`;
@@ -1040,7 +1044,7 @@ function recentSectionHtml(p) {
         const cls = valClass(g.f - p.price);
         return `
             <div class="grow">
-                <span class="d">${fmtMd(g.e.ymd)}</span>
+                <span class="d">${fmtJstMd(g.e.start)}</span>
                 <span class="m"><div class="opp">${esc(g.e.name)}<small>${Math.round(g.min)}分</small></div><div class="line">${parts}</div></span>
                 <span class="f">${fmt1(g.f)}</span>
                 <span class="bar"><i class="${cls}" style="width:${pct(g.f)}"></i><b style="left:${pct(p.price)}"></b></span>
@@ -1295,7 +1299,7 @@ async function renderActive() {
 function renderHeader() {
     const locked = !!state.weeks[curWk];
     const info = weekInfo[curWk];
-    let sub = `${SEASON_YEAR - 1}-${String(SEASON_YEAR).slice(2)} · 今週 ${fmtWeek(curWk)}`;
+    let sub = `${SEASON_YEAR - 1}-${String(SEASON_YEAR).slice(2)} · 今週 ${fmtWeek(curWk)}（現地）`;
     if (!locked && info?.lockAt) sub += ` · ロック ${fmtJst(info.lockAt)}`;
     document.getElementById('header-sub').textContent = sub;
 }
